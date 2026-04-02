@@ -11,6 +11,7 @@ RUN apk add --no-cache wget && \
 FROM alpine:latest
 
 ENV CONFIG=/opt/mindustry/config
+WORKDIR /opt/mindustry
 
 RUN \
     apk add --no-cache openjdk8-jre shadow su-exec && \

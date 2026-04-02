@@ -24,6 +24,7 @@ RUN \
 COPY --from=builder --chown=sheep:sheep /build/server-release.jar /opt/mindustry/server-release.jar
 COPY --from=builder --chown=sheep:sheep /build/dependencies.jar /opt/mindustry/dependencies.jar
 COPY docker-entrypoint.sh /
+RUN chmod +x /docker-entrypoint.sh
 
 VOLUME /opt/mindustry/config
 

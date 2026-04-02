@@ -1,0 +1,161 @@
+name: Build and Push Mindustry Beta Server
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Mindustry tag to build (leave empty for latest beta)'
+        required: false
+        type: string
+
+env:
+  REGISTRY_DOCKERHUB: docker.io
+  REGISTRY_GHCR: ghcr.io
+  IMAGE_NAME_DOCKERHUB: jonathanlo411/mindustry-beta-server
+  IMAGE_NAME_GHCR: ${{ github.repository }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Determine Mindustry tag
+        id: mindustry_tag
+        run: |
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            # Tag was pushed to the repository
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+          elif [[ -n "${{ github.event.inputs.tag_name }}" ]]; then
+            # Manual workflow dispatch with specific tag
+            TAG_NAME="${{ github.event.inputs.tag_name }}"
+          else
+            # Fetch latest beta release from Mindustry repo
+            LATEST_RELEASE=$(curl -s https://api.github.com/repos/Anuken/Mindustry/releases | \
+              jq -r '.[] | select(.prerelease == false) | .tag_name' | head -1)
+            TAG_NAME="${LATEST_RELEASE}"
+          fi
+          
+          echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
+          echo "Building Mindustry server version: ${TAG_NAME}"
+
+      - name: Verify Mindustry release
+        run: |
+          TAG_NAME="${{ steps.mindustry_tag.outputs.tag_name }}"
+          curl -s -f -I "https://github.com/Anuken/Mindustry/releases/download/${TAG_NAME}/server-release.jar" || \
+            (echo "Release ${TAG_NAME} not found on Mindustry repository" && exit 1)
+          echo "✓ Release ${TAG_NAME} verified"
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_DOCKERHUB }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_GHCR }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        run: |
+          TAG_NAME="${{ steps.mindustry_tag.outputs.tag_name }}"
+          CLEAN_TAG="${TAG_NAME#v}"
+          echo "version=${CLEAN_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          build-args: |
+            tag_name=${{ steps.mindustry_tag.outputs.tag_name }}
+          tags: |
+            ${{ env.REGISTRY_DOCKERHUB }}/${{ env.IMAGE_NAME_DOCKERHUB }}:${{ steps.meta.outputs.version }}
+            ${{ env.REGISTRY_DOCKERHUB }}/${{ env.IMAGE_NAME_DOCKERHUB }}:latest
+            ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:${{ steps.meta.outputs.version }}
+            ${{ env.REGISTRY_GHCR }}/${{ env.IMAGE_NAME_GHCR }}:latest
+          labels: |
+            org.opencontainers.image.title=Mindustry Beta Server
+            org.opencontainers.image.description=Mindustry dedicated server (beta version)
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Create Release Notes
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          echo "## Mindustry Beta Server ${VERSION}" > RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "Built from Mindustry release: ${{ steps.mindustry_tag.outputs.tag_name }}" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "### Docker Images" >> RELEASE_NOTES.md
+          echo "- Docker Hub: \`docker pull jonathanlo411/mindustry-beta-server:${VERSION}\`" >> RELEASE_NOTES.md
+          echo "- GHCR: \`docker pull ghcr.io/${{ github.repository }}:${VERSION}\`" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "### Quick Start" >> RELEASE_NOTES.md
+          echo "\`\`\`bash" >> RELEASE_NOTES.md
+          echo "docker run -d \\" >> RELEASE_NOTES.md
+          echo "  -v mindustry-config:/opt/mindustry/config \\" >> RELEASE_NOTES.md
+          echo "  -p 6567:6567/tcp \\" >> RELEASE_NOTES.md
+          echo "  -p 6567:6567/udp \\" >> RELEASE_NOTES.md
+          echo "  -p 6859:6859/tcp \\" >> RELEASE_NOTES.md
+          echo "  jonathanlo411/mindustry-beta-server:${VERSION}" >> RELEASE_NOTES.md
+          echo "\`\`\`" >> RELEASE_NOTES.md
+
+      - name: Update Latest Version
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          echo "${VERSION}" > latest.txt
+          
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Commit and push if changed
+          if git diff --quiet latest.txt; then
+            echo "latest.txt unchanged"
+          else
+            git add latest.txt
+            git commit -m "Update latest version to ${VERSION}"
+            git push
+          fi
+
+      - name: Create Repository Tag and Release
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          TAG_NAME="${{ steps.mindustry_tag.outputs.tag_name }}"
+          
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Create annotated tag
+          git tag -a "${TAG_NAME}" -m "Mindustry ${VERSION} - Docker build" || echo "Tag already exists"
+          
+          # Push tag
+          git push origin "${TAG_NAME}" 2>/dev/null || echo "Tag push skipped (may already exist)"
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: RELEASE_NOTES.md
+          tag_name: ${{ steps.mindustry_tag.outputs.tag_name }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

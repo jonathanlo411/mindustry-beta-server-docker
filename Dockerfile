@@ -4,10 +4,9 @@ ARG tag_name
 
 WORKDIR /build
 
-RUN \
-    apk add --no-cache wget && \
-    wget https://github.com/Anuken/Mindustry/releases/download/${tag_name}/server-release.jar -O server-release.jar && \
-    wget https://github.com/Anuken/Mindustry/releases/download/${tag_name}/dependencies.jar -O dependencies.jar
+RUN apk add --no-cache wget && \
+    wget "https://github.com/Anuken/Mindustry/releases/download/${tag_name}/server-release.jar" -O server-release.jar && \
+    wget "https://github.com/Anuken/Mindustry/releases/download/${tag_name}/dependencies.jar" -O dependencies.jar
 
 FROM alpine:latest
 

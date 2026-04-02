@@ -6,6 +6,9 @@ services:
     container_name: mindustry-beta-server
     restart: unless-stopped
     
+    stdin_open: true
+    tty: true
+    
     volumes:
       - mindustry-config:/opt/mindustry/config
     
@@ -16,10 +19,6 @@ services:
     
     environment:
       CONFIG: /opt/mindustry/config
-    
-    # Optional: uncomment to see server output
-    # stdin_open: true
-    # tty: true
 
 volumes:
   mindustry-config:

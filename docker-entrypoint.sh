@@ -1,5 +1,5 @@
 #!/bin/sh
 set -e
 
-# Switch to sheep user and run the server
+# Run server as sheep user
 exec su-exec sheep:sheep java -jar /opt/mindustry/server-release.jar "$@"

@@ -13,7 +13,7 @@ FROM alpine:latest
 ENV CONFIG=/opt/mindustry/config
 
 RUN \
-    apk add --no-cache openjdk8-jre shadow && \
+    apk add --no-cache openjdk8-jre shadow su-exec && \
     mkdir -p /opt/mindustry && \
     mkdir -p /opt/mindustry/config && \
     useradd -u 999 -U -s /bin/false sheep && \

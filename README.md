@@ -24,17 +24,6 @@ Or with docker-compose (includes interactive mode):
 docker-compose up
 ```
 
-Run in background with interactive access:
-```bash
-docker run -itd \
-  -v mindustry-config:/opt/mindustry/config \
-  -p 6567:6567/tcp \
-  -p 6567:6567/udp \
-  -p 6859:6859/tcp \
-  --name mindustry \
-  jonathanlo411/mindustry-beta-server:latest
-```
-
 ## Monitoring & Commands
 
 View live server output:
@@ -63,15 +52,6 @@ Stop server:
 docker stop mindustry
 docker rm mindustry
 ```
-
-## Server Configuration
-
-Server configuration is stored in the `mindustry-config` volume at `/opt/mindustry/config`. Edit config files on the host machine:
-
-## Ports
-
-- 6567 (TCP/UDP) - Game server
-- 6859 (TCP) - Admin/query
 
 ## Registries
 
